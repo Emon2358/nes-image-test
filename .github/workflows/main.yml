@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build ROM
-    runs-on: ubuntu-latest # Linux環境で実行
+    runs-on: ubuntu-latest
 
     steps:
       # 1. リポジトリのコードをチェックアウト
@@ -22,21 +22,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cc65
 
-      # 3. アセンブル (アセンブリコードをオブジェクトファイルに)
+      # 3. アセンブル (chr.s を追加)
       - name: Assemble source files
         working-directory: ./src
         run: |
           ca65 header.s -o ../header.o
           ca65 main.s -o ../main.o
+          ca65 chr.s -o ../chr.o
 
-      # 4. リンク (オブジェクトファイルをROMに)
+      # 4. リンク (chr.o を追加)
       - name: Link object files
         run: |
-          ld65 -C src/nes.cfg -o rapid-fire-counter.nes header.o main.o
+          ld65 -C src/nes.cfg -o rapid-fire-counter.nes header.o main.o chr.o
 
       # 5. 成果物 (ROM) をアップロード
       - name: Upload ROM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nes-rom # アーティファクト名
-          path: rapid-fire-counter.nes # アップロードするファイル
+          name: nes-rom
+          path: rapid-fire-counter.nes
