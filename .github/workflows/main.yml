@@ -2,17 +2,14 @@
 
 name: Build NES ROM
 
-# どのタイミングで実行するか (mainブランチへのpush時)
 on:
   push:
     branches:
       - main
-  # 手動実行も可能にする
   workflow_dispatch:
 
 jobs:
   build:
-    # Ubuntuの最新版で実行
     runs-on: ubuntu-latest
 
     steps:
@@ -27,19 +24,14 @@ jobs:
           sudo apt-get install -y cc65
 
       # 3. CコードをコンパイルしてROMをビルド
-      # cl65: cc65のコンパイラ・リンカを統合したフロントエンド
-      # -t nes: ターゲットをNESに指定
-      # -C nes.cfg: 使用するリンカ設定ファイルを指定
-      # -o rensya.nes: 出力するROMファイル名
-      # main.c: コンパイルするソースファイル
+      # 【修正】 -D__NES__=1 を追加して、nes.h が正しく読み込まれるようにする
+      # 【修正】 -v (verbose) を追加して、詳細なログを表示する
       - name: Compile NES ROM
-        run: cl65 -t nes -C nes.cfg -o rensya.nes main.c
+        run: cl65 -v -D__NES__=1 -t nes -C nes.cfg -o rensya.nes main.c
 
       # 4. ビルドした.nesファイルをアーティファクトとしてアップロード
       - name: Upload ROM Artifact
         uses: actions/upload-artifact@v4
         with:
-          # アーティファクト名
           name: nes-rom
-          # アップロードするファイル
           path: rensya.nes
