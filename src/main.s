@@ -12,6 +12,9 @@ DEC_BUFFER_1   = $0012 ; (1の位)
 ; ゼロページ (高速アクセス用)
 ZP_VALUE_LO = $F0
 ZP_VALUE_HI = $F1
+ZP_ADDR_LO  = $F2
+ZP_ADDR_HI  = $F3
+ZP_COUNTER  = $F4
 
 ; PPUレジスタ
 PPUCTRL   = $2000
@@ -32,20 +35,20 @@ RESET:
   LDX #$FF
   TXS            ; スタックポインタ初期化
   
-  ; APU/PPU無効化
+  ; APU/PPU無効化 (画面が真っ黒になるのを防ぐため、まずPPUを完全に止める)
   LDA #$00
-  STA PPUCTRL
-  STA PPUMASK
+  STA PPUCTRL   ; NMI無効
+  STA PPUMASK   ; 描画OFF
   STA $4010
   STA $4015
   STX $4017
   
-  ; RAM初期化 (カウンターを$0000-$0001までクリア)
+  ; RAM初期化
   LDA #$00
   STA COUNTER_LO
   STA COUNTER_HI
 
-  ; PPUウォームアップ待機
+  ; PPUウォームアップ待機 (PPUが安定するまでVBlankを2回待つ)
   BIT PPUSTATUS
 WaitVBlank1:
   BIT PPUSTATUS
@@ -54,13 +57,59 @@ WaitVBlank2:
   BIT PPUSTATUS
   BPL WaitVBlank2
 
-  ; PPU初期化
-  JSR InitPPU
+  ; --- ここからが重要な初期化シーケンス ---
+  
+  ; 1. VRAM (ネームテーブル $2000-$2FFF) を $00 でクリア
+  LDA #$20
+  STA ZP_ADDR_HI
+  LDA #$00
+  STA ZP_ADDR_LO
+  
+  STA PPUADDR     ; $2000 をセット (ZP_ADDR_HI は既に $20)
+  STA PPUADDR
+  
+  LDX #$04        ; 4つのネームテーブル ($400 * 4 = $1000 バイト)
+ClearVRAM_Loop:
+  LDA #$00        ; $00 (黒タイル) を
+  LDY #$00        ; 256回
+ClearVRAM_Inner:
+  STA PPUDATA     ; VRAMに書き込む
+  INY
+  BNE ClearVRAM_Inner
+  ; (ここまでで $100 バイト = 256 バイト書き込んだ)
+  
+  INX             ; Xをデクリメント (4回ループ用だが、ここではインクリメントで実装)
+  CPX #$10        ; $1000 バイト書き込んだか？ (16回 * 256バイト)
+  BNE ClearVRAM_Inner ; (注: この実装は $1000 バイト (4KB) をクリアします)
+  
+  ; (簡易版: $2000-$23FF の 1KB (1024バイト) だけクリアする場合)
+  ; LDX #$04
+  ; ClearVRAM_Loop:
+  ;   LDA #$00
+  ;   LDY #$00
+  ; ClearVRAM_Inner:
+  ;   STA PPUDATA
+  ;   INY
+  ;   BNE ClearVRAM_Inner
+  ; DEX
+  ; BNE ClearVRAM_Loop
+  
+  ; 2. パレットを読み込む
+  JSR LoadPaletteData
+  
+  ; 3. 固定テキスト ("AB:") をネームテーブルに書き込む
+  JSR LoadTextData
 
-  ; NMI有効化、画面表示ON
+  ; PPU初期化完了
+
+  ; 4. PPUを有効化
+  LDA #$00        ; スクロール位置をリセット
+  STA PPUSCROLL
+  STA PPUSCROLL
+  
   LDA #%10010000  ; NMI有効 (VBlank), BGパターン $0000
   STA PPUCTRL
-  LDA #%00011110  ; BG/Sprite表示ON, 画面端クリップOFF
+  LDA #%00011110  ; BG/Sprite表示ON
   STA PPUMASK
 
   CLI            ; 割り込み許可
@@ -70,9 +119,8 @@ MainLoop:
 
 .segment "CODE"
 
-; --- PPU初期化ルーチン ---
-InitPPU:
-  ; パレットを読み込む (正しい順序で)
+; --- PPU初期化ルーチン (サブルーチン化) ---
+LoadPaletteData:
   LDA PPUSTATUS   ; PPUラッチをクリア
   LDA #$3F
   STA PPUADDR
@@ -81,15 +129,16 @@ InitPPU:
   
   LDX #$00
 LoadPaletteLoop:
-  CPX #$04        ; 4バイト書き込む ($3F00, $3F01, $3F02, $3F03)
+  CPX #$04        ; 4バイト書き込む
   BEQ PaletteDone
-  LDA Palette, X  ; X=0, 1, 2, 3 の順で読み込む
+  LDA Palette, X
   STA PPUDATA
   INX
   JMP LoadPaletteLoop
 PaletteDone:
-  
-  ; 固定テキスト ("AB:") をネームテーブルに書き込む
+  RTS
+
+LoadTextData:
   LDA PPUSTATUS
   LDA #$20 ; ネームテーブルアドレス $2060 (5行目あたり)
   STA PPUADDR
@@ -157,7 +206,7 @@ ReadLoop:
 ; --- カウンター更新 (A/B 合計) ---
 UpdateCounters:
   LDA CONTROLLER1
-  AND #%00000011      ; AまたはBが押されているか (ビット0=A, ビット1=B)
+  AND #%00000011      ; AまたはBが押されているか
   BEQ SkipInc         ; 押されていなければスキップ
   
   LDA CONTROLLER1_PREV
@@ -165,7 +214,6 @@ UpdateCounters:
   BNE SkipInc         ; 押されていたら (押しっぱなし) スキップ
   
   ; AまたはBが「押された瞬間」
-  ; カウンター (16bit) をインクリメント
   LDA COUNTER_LO
   CLC
   ADC #1
@@ -177,10 +225,10 @@ UpdateCounters:
   ; 999を超えたかチェック (1000 == $03E8)
   LDA COUNTER_HI
   CMP #$03
-  BNE SkipInc ; HIが3じゃなければスキップ
+  BNE SkipInc 
   LDA COUNTER_LO
   CMP #$E8
-  BNE SkipInc ; LOがE8じゃなければスキップ
+  BNE SkipInc 
   
   ; 1000になったので0に戻す
   LDA #$00
@@ -199,7 +247,7 @@ UpdateDisplay:
   
   LDA #$20
   STA PPUADDR
-  LDA #$63 ; "AB:" の直後 ($2060=A, $2061=B, $2062=:)
+  LDA #$63 ; "AB:" の直後
   STA PPUADDR
   LDA DEC_BUFFER_100  ; 100の位
   STA PPUDATA
@@ -211,9 +259,6 @@ UpdateDisplay:
   RTS
 
 ; サブルーチン: 16ビット値 (A:Lo, X:Hi) を 10進数3桁 (0-999) に変換
-; 入力: A (Lo), X (Hi)
-; 出力: DEC_BUFFER_100, DEC_BUFFER_10, DEC_BUFFER_1
-; 破壊: Y, ZP_VALUE_LO, ZP_VALUE_HI
 WriteDecValue:
   STX ZP_VALUE_HI
   STA ZP_VALUE_LO
@@ -225,19 +270,17 @@ Dec_Loop100:
   LDA ZP_VALUE_LO
   SEC
   SBC #$64
-  TAY            ; LoをYに一時保存
+  TAY            
   LDA ZP_VALUE_HI
   SBC #$00
-  BCC Dec_Set100 ; 借り発生 (引けなかった)
+  BCC Dec_Set100 
   
-  ; 引けたので値を更新
   STA ZP_VALUE_HI
   TYA
   STA ZP_VALUE_LO
   JMP Dec_Loop100
 
 Dec_Set100:
-  ; 引けなかったので、カウンターYを100の位にセット
   STY DEC_BUFFER_100
   
   LDY #$FF
@@ -247,18 +290,17 @@ Dec_Loop10:
   LDA ZP_VALUE_LO
   SEC
   SBC #$0A
-  BCS Dec_Loop10_Update ; 引けた
-  BCC Dec_Set10       ; 引けなかった
+  BCS Dec_Loop10_Update 
+  BCC Dec_Set10       
   
 Dec_Loop10_Update:
   STA ZP_VALUE_LO
   JMP Dec_Loop10
   
 Dec_Set10:
-  ; 引けなかったので、カウンターYを10の位にセット
   STY DEC_BUFFER_10
   
-  LDA ZP_VALUE_LO   ; 残りが1の位
+  LDA ZP_VALUE_LO   
   STA DEC_BUFFER_1
   RTS
 
