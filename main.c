@@ -1,9 +1,9 @@
 /*
- * main.c - NES連射測定プログラム
- * 10秒間（600フレーム）のAボタン押下回数を測定します。
+ * main.c - NES連射測定プログラム (A/Bボタン対応版)
+ * 10秒間（600フレーム）のAまたはBボタン押下回数を測定します。
  */
 
-#include <nes.h>    // NES固有の関数やマクロ（PPU制御、パッド読み取りなど）
+#include <nes.h>    // NES固有の関数やマクロ
 #include <conio.h>  // cprintf()などのコンソール入出力関数
 #include <stdio.h>  // sprintf()用
 
@@ -11,7 +11,8 @@
 #define GAME_DURATION_FRAMES (60 * 10) // 10秒
 
 // パレットデータ（白、黒、赤、青）
-const byte palette[16] = {
+// 【修正1】 'byte' を 'unsigned char' に変更
+const unsigned char palette[16] = {
   0x0f, 0x00, 0x16, 0x12,
   0x0f, 0x0f, 0x0f, 0x0f,
   0x0f, 0x0f, 0x0f, 0x0f,
@@ -21,7 +22,8 @@ const byte palette[16] = {
 // グローバル変数
 static unsigned int press_count; // ボタン押下回数
 static unsigned int timer;       // 残り時間（フレーム）
-static byte last_pad_state;      // 前フレームのパッド状態
+// 【修正1】 'byte' を 'unsigned char' に変更
+static unsigned char last_pad_state; // 前フレームのパッド状態
 static char buffer[32];          // 文字列描画用バッファ
 
 // メイン関数
@@ -40,8 +42,8 @@ void main(void) {
   // タイトルと説明を表示
   gotoxy(8, 8);
   cprintf("RENSHA MEASUREMENT");
-  gotoxy(7, 12);
-  cprintf("PRESS A BUTTON START!");
+  gotoxy(4, 12);
+  cprintf("PRESS A OR B BUTTON START!"); // メッセージも変更
   gotoxy(4, 20);
   cprintf("COUNT: 0");
   gotoxy(20, 20);
@@ -59,12 +61,12 @@ void main(void) {
   while (1) {
     ppu_wait_nmi(); // VBlank（画面描画の垂直帰線期間）まで待つ
     
-    // パッド1の入力を読み取る
-    byte pad = pad_poll(0);
+    // 【修正1】 'byte' を 'unsigned char' に変更
+    unsigned char pad = pad_poll(0);
     
-    // Aボタンが押された瞬間にゲーム開始
-    // (押されている AND 1フレーム前は押されていない)
-    if ((pad & PAD_A) && !(last_pad_state & PAD_A)) {
+    // 【修正2】 AボタンまたはBボタンが押された瞬間にゲーム開始
+    // (A or B が押されている AND 1フレーム前は押されていない)
+    if ((pad & (PAD_A | PAD_B)) && !(last_pad_state & (PAD_A | PAD_B))) {
       break;
     }
     last_pad_state = pad;
@@ -88,11 +90,11 @@ void main(void) {
     // タイマーを減らす
     timer--;
 
-    // パッド1の入力を読み取る
-    byte pad = pad_poll(0);
+    // 【修正1】 'byte' を 'unsigned char' に変更
+    unsigned char pad = pad_poll(0);
 
-    // Aボタンが押された「瞬間」を検出（連射測定のためエッジ検出）
-    if ((pad & PAD_A) && !(last_pad_state & PAD_A)) {
+    // 【修正2】 AまたはBボタンが押された「瞬間」を検出（連射測定のためエッジ検出）
+    if ((pad & (PAD_A | PAD_B)) && !(last_pad_state & (PAD_A | PAD_B))) {
       press_count++;
       
       // カウント数を更新
