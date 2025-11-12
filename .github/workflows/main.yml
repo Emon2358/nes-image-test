@@ -23,22 +23,19 @@ jobs:
 
       # --- ここから修正 ---
 
-      # 3a. コンパイル＆アセンブル (Cコードをオブジェクトファイル .o に変換)
-      # 【修正】 'cc65' ではなく 'cl65 -c' を使用します
-      # cl65: 統合ドライバ
-      # -c: コンパイルとアセンブルのみ（リンクは行わない）
-      # -t nes -D__NES__=1: NES用であり、nes.h が正しく機能するようにマクロを定義
+      # 3a. コンパイル (Cコードをオブジェクトファイル .o に変換)
+      # 【修正】
+      # -D__NES__=1 と -I... フラグを削除します。
+      # これらは -t nes によって自動的に処理されるため、手動で指定すると競合します。
       - name: Compile C code to Object file
-        run: cl65 -v -c -t nes -D__NES__=1 -I /usr/share/cc65/include -o main.o main.c
+        run: cl65 -v -c -t nes -o main.o main.c
 
       # 3b. リンク (オブジェクトファイルとライブラリを結合して .nes ROM を作成)
-      # ld65: リンカ
-      # -C nes.cfg: メモリ配置を指定
-      # -o rensya.nes: 最終的なROMファイル名
-      # main.o: コンパイル済みのコード
-      # nes.lib: ppu_off や pad_poll などの関数本体が含まれるライブラリ
+      # 【修正】
+      # ld65 を直接呼ぶ代わりに cl65 を使用します。
+      # -t nes フラグにより、nes.lib が自動的にリンクされます。
       - name: Link ROM
-        run: ld65 -v -C nes.cfg -o rensya.nes main.o nes.lib
+        run: cl65 -v -t nes -C nes.cfg -o rensya.nes main.o
       
       # --- ここまで修正 ---
 
