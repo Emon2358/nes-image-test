@@ -1,0 +1,57 @@
+name: 🏞️ Image to NES ROM Converter
+
+on:
+  push:
+    paths:
+      # このディレクトリに画像がプッシュされたら起動
+      - 'images/**.png'
+      - 'images/**.jpg'
+      - 'images/**.jpeg'
+
+jobs:
+  build-nes-rom:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. リポジトリのコードをチェックアウト
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # 2. Python 環境をセットアップ
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 3. 必要なライブラリをインストール (requirements.txt を参照)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. 変換スクリプトの実行
+      - name: Run NES conversion script
+        run: |
+          # 出力用ディレクトリを作成
+          mkdir -p nes_roms
+
+          # images/ ディレクトリ内の全ての .png と .jpg を処理
+          for img_file in images/*.png images/*.jpg images/*.jpeg; do
+            if [ -f "$img_file" ]; then
+              # ファイル名から拡張子を除いた名前を取得 (例: images/castle.png -> castle)
+              filename=$(basename "$img_file")
+              base_name="${filename%.*}"
+              
+              echo "Processing $img_file -> nes_roms/$base_name.nes"
+              
+              # ここで、Python スクリプトを実行
+              python tools/image_to_nes.py "$img_file" "nes_roms/$base_name.nes"
+            fi
+          done
+
+      # 5. 生成された .nes ファイルを「アーティファクト」として保存
+      - name: Upload .nes ROMs as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nes-roms
+          path: nes_roms/ # nes_roms ディレクトリ全体をアップロード
