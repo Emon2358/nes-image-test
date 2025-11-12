@@ -13,23 +13,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. リポジトリのコードをチェックアウト
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. cc65コンパイラをインストール
       - name: Install cc65
         run: |
           sudo apt-get update
           sudo apt-get install -y cc65
 
-      # 3. CコードをコンパイルしてROMをビルド
-      # 【修正】 -D__NES__=1 を追加して、nes.h が正しく読み込まれるようにする
-      # 【修正】 -v (verbose) を追加して、詳細なログを表示する
       - name: Compile NES ROM
-        run: cl65 -v -D__NES__=1 -t nes -C nes.cfg -o rensya.nes main.c
+        # 【修正】
+        # main.c の後ろに、NES固有関数のライブラリである 'nes.lib' を追加します。
+        # これにより、ppu_off や pad_poll などの関数がリンクされます。
+        run: cl65 -v -D__NES__=1 -t nes -C nes.cfg -o rensya.nes main.c nes.lib
 
-      # 4. ビルドした.nesファイルをアーティファクトとしてアップロード
       - name: Upload ROM Artifact
         uses: actions/upload-artifact@v4
         with:
