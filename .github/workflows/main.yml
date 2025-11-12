@@ -22,15 +22,14 @@ jobs:
           sudo apt-get install -y cc65
 
       # --- ここから修正 ---
-      # cl65コマンドを廃止し、cc65 (コンパイル) と ld65 (リンク) に分割します
 
-      # 3a. コンパイル (Cコードをオブジェクトファイル .o に変換)
-      # cc65: Cコンパイラ
+      # 3a. コンパイル＆アセンブル (Cコードをオブジェクトファイル .o に変換)
+      # 【修正】 'cc65' ではなく 'cl65 -c' を使用します
+      # cl65: 統合ドライバ
+      # -c: コンパイルとアセンブルのみ（リンクは行わない）
       # -t nes -D__NES__=1: NES用であり、nes.h が正しく機能するようにマクロを定義
-      # -c main.c: main.c をコンパイル
-      # -o main.o: main.o という名前で出力
-      - name: Compile C code
-        run: cc65 -v -t nes -D__NES__=1 -I /usr/share/cc65/include -c main.c -o main.o
+      - name: Compile C code to Object file
+        run: cl65 -v -c -t nes -D__NES__=1 -I /usr/share/cc65/include -o main.o main.c
 
       # 3b. リンク (オブジェクトファイルとライブラリを結合して .nes ROM を作成)
       # ld65: リンカ
