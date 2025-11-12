@@ -1,19 +1,24 @@
-name: 🏞️ Image to NES ROM Converter
+name: 🎮 Build NES Game ROM
 
 on:
+  # 'Actions' タブから手動で実行できるようにする
+  workflow_dispatch: {}
+
+  # main ブランチにプッシュされたときにも実行
   push:
+    branches:
+      - main
     paths:
-      # このディレクトリに画像がプッシュされたら起動
-      - 'images/**.png'
-      - 'images/**.jpg'
-      - 'images/**.jpeg'
+      # スクリプトが変更された場合のみ実行
+      - 'tools/rennda_game_builder.py'
+      - '.github/workflows/game_builder.yml'
 
 jobs:
   build-nes-rom:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. リポジトリのコードをチェックアウト
+      # 1. リポジトリのコード（ビルドスクリプト）をチェックアウト
       - name: Check out repository
         uses: actions/checkout@v4
 
@@ -22,36 +27,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+      
+      # 3. 依存ライブラリのインストール
+      # (このスクリプトは外部ライブラリを必要としません)
+      # - name: Install dependencies
+      #   run: pip install ...
 
-      # 3. 必要なライブラリをインストール (requirements.txt を参照)
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # 4. 変換スクリプトの実行
-      - name: Run NES conversion script
+      # 4. ゲーム ROM ビルドスクリプトの実行
+      - name: Run NES Game Builder script
         run: |
           # 出力用ディレクトリを作成
-          mkdir -p nes_roms
-
-          # images/ ディレクトリ内の全ての .png と .jpg を処理
-          for img_file in images/*.png images/*.jpg images/*.jpeg; do
-            if [ -f "$img_file" ]; then
-              # ファイル名から拡張子を除いた名前を取得 (例: images/castle.png -> castle)
-              filename=$(basename "$img_file")
-              base_name="${filename%.*}"
-              
-              echo "Processing $img_file -> nes_roms/$base_name.nes"
-              
-              # ここで、Python スクリプトを実行
-              python tools/image_to_nes.py "$img_file" "nes_roms/$base_name.nes"
-            fi
-          done
+          mkdir -p nes_rom
+          
+          # スクリプトを実行して ROM を生成
+          python tools/rennda_game_builder.py "nes_rom/rennda_game.nes"
 
       # 5. 生成された .nes ファイルを「アーティファクト」として保存
-      - name: Upload .nes ROMs as Artifacts
+      - name: Upload .nes ROM as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nes-roms
-          path: nes_roms/ # nes_roms ディレクトリ全体をアップロード
+          name: nes-game-rom
+          path: nes_rom/rennda_game.nes
