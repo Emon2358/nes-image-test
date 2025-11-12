@@ -1,47 +1,42 @@
-# .github/workflows/build.yml
-
 name: Build NES ROM
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build ROM
+    runs-on: ubuntu-latest # Linux環境で実行
 
     steps:
-      - name: Checkout code
+      # 1. リポジトリのコードをチェックアウト
+      - name: Check out repository
         uses: actions/checkout@v4
 
+      # 2. cc65 (NES開発ツールチェーン) をインストール
       - name: Install cc65
         run: |
           sudo apt-get update
           sudo apt-get install -y cc65
 
-      # --- ここから修正 ---
+      # 3. アセンブル (アセンブリコードをオブジェクトファイルに)
+      - name: Assemble source files
+        working-directory: ./src
+        run: |
+          ca65 header.s -o ../header.o
+          ca65 main.s -o ../main.o
 
-      # 3a. コンパイル (Cコードをオブジェクトファイル .o に変換)
-      # 【修正】
-      # -D__NES__=1 と -I... フラグを削除します。
-      # これらは -t nes によって自動的に処理されるため、手動で指定すると競合します。
-      - name: Compile C code to Object file
-        run: cl65 -v -c -t nes -o main.o main.c
+      # 4. リンク (オブジェクトファイルをROMに)
+      - name: Link object files
+        run: |
+          ld65 -C src/nes.cfg -o rapid-fire-counter.nes header.o main.o
 
-      # 3b. リンク (オブジェクトファイルとライブラリを結合して .nes ROM を作成)
-      # 【修正】
-      # ld65 を直接呼ぶ代わりに cl65 を使用します。
-      # -t nes フラグにより、nes.lib が自動的にリンクされます。
-      - name: Link ROM
-        run: cl65 -v -t nes -C nes.cfg -o rensya.nes main.o
-      
-      # --- ここまで修正 ---
-
-      # 4. ビルドした.nesファイルをアーティファクトとしてアップロード
-      - name: Upload ROM Artifact
+      # 5. 成果物 (ROM) をアップロード
+      - name: Upload ROM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nes-rom
-          path: rensya.nes
+          name: nes-rom # アーティファクト名
+          path: rapid-fire-counter.nes # アップロードするファイル
