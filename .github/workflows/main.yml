@@ -21,12 +21,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cc65
 
-      - name: Compile NES ROM
-        # 【修正】
-        # main.c の後ろに、NES固有関数のライブラリである 'nes.lib' を追加します。
-        # これにより、ppu_off や pad_poll などの関数がリンクされます。
-        run: cl65 -v -D__NES__=1 -t nes -C nes.cfg -o rensya.nes main.c nes.lib
+      # --- ここから修正 ---
+      # cl65コマンドを廃止し、cc65 (コンパイル) と ld65 (リンク) に分割します
 
+      # 3a. コンパイル (Cコードをオブジェクトファイル .o に変換)
+      # cc65: Cコンパイラ
+      # -t nes -D__NES__=1: NES用であり、nes.h が正しく機能するようにマクロを定義
+      # -c main.c: main.c をコンパイル
+      # -o main.o: main.o という名前で出力
+      - name: Compile C code
+        run: cc65 -v -t nes -D__NES__=1 -I /usr/share/cc65/include -c main.c -o main.o
+
+      # 3b. リンク (オブジェクトファイルとライブラリを結合して .nes ROM を作成)
+      # ld65: リンカ
+      # -C nes.cfg: メモリ配置を指定
+      # -o rensya.nes: 最終的なROMファイル名
+      # main.o: コンパイル済みのコード
+      # nes.lib: ppu_off や pad_poll などの関数本体が含まれるライブラリ
+      - name: Link ROM
+        run: ld65 -v -C nes.cfg -o rensya.nes main.o nes.lib
+      
+      # --- ここまで修正 ---
+
+      # 4. ビルドした.nesファイルをアーティファクトとしてアップロード
       - name: Upload ROM Artifact
         uses: actions/upload-artifact@v4
         with:
