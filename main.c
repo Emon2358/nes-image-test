@@ -1,6 +1,7 @@
-//*
- * main.c - 修正版
- * 浮動小数点演算を整数演算に置き換え
+/*
+ * main.c - NES Rapid Fire Measurement (A/B)
+ * Measures A or B button presses over 10 seconds (600 frames).
+ * Fixed version: Replaced floating point operations.
  */
 
 #include <nes.h>
@@ -16,15 +17,17 @@ const unsigned char palette[16] = {
   0x0f, 0x0f, 0x0f, 0x0f
 };
 
+// Global variables
 static unsigned int press_count;
 static unsigned int timer;
 static unsigned char last_pad_state;
 static char buffer[32];
 
 void main(void) {
+  // Local variable (C89 style: declare at top)
   unsigned char pad;
 
-  // --- 初期化 ---
+  // --- Initialization ---
   ppu_off();
   pal_bg(palette);
   clrscr();
@@ -44,7 +47,7 @@ void main(void) {
   timer = GAME_DURATION_FRAMES;
   last_pad_state = 0;
   
-  // スタート待ちループ
+  // --- Wait for Start Loop ---
   while (1) {
     ppu_wait_nmi();
     pad = pad_poll(0);
@@ -55,6 +58,7 @@ void main(void) {
     last_pad_state = pad;
   }
   
+  // Clear screen for measurement
   ppu_off();
   clrscr();
   gotoxy(4, 12);
@@ -63,12 +67,13 @@ void main(void) {
   cprintf("COUNT: 0");
   ppu_on_all();
 
-  // --- メインゲームループ (10秒間) ---
+  // --- Main Game Loop (10 seconds) ---
   while (timer > 0) {
     ppu_wait_nmi();
     timer--;
     pad = pad_poll(0);
 
+    // Check for edge trigger (A or B)
     if ((pad & (PAD_A | PAD_B)) && !(last_pad_state & (PAD_A | PAD_B))) {
       press_count++;
       
@@ -77,6 +82,7 @@ void main(void) {
       cprintf(buffer);
     }
     
+    // Update timer display every second
     if (timer % 60 == 0) {
       gotoxy(20, 20);
       sprintf(buffer, "TIME: %d ", timer / 60);
@@ -86,7 +92,7 @@ void main(void) {
     last_pad_state = pad;
   }
 
-  // --- 結果表示 ---
+  // --- Result Display ---
   ppu_off();
   clrscr();
   
@@ -98,19 +104,20 @@ void main(void) {
   sprintf(buffer, "TOTAL: %d HITS", press_count);
   cprintf(buffer);
   
-  // 【修正】浮動小数点演算を整数演算に置き換える
+  // Display HPS (Hits Per Second) using integer math
   gotoxy(5, 16);
   {
-    // press_count が 163 なら 16.3 HITS/SECOND
-    unsigned int hps_integer = press_count / 10; // 整数部 (16)
-    unsigned int hps_fraction = press_count % 10; // 小数部 (3)
+    // e.g., if press_count = 163
+    unsigned int hps_integer = press_count / 10; // 16
+    unsigned int hps_fraction = press_count % 10; // 3
     
-    // " (16.3 HITS/SECOND)" という文字列を作成
+    // Create string " (16.3 HITS/SECOND)"
     sprintf(buffer, "(%d.%d HITS/SECOND)", hps_integer, hps_fraction);
     cprintf(buffer);
   }
   
   ppu_on_all();
 
+  // Infinite loop
   while (1);
 }
