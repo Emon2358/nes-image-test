@@ -1,6 +1,6 @@
-/*
- * main.c - NES連射測定プログラム (A/Bボタン対応版)
- * 10秒間（600フレーム）のAまたはBボタン押下回数を測定します。
+//*
+ * main.c - 修正版
+ * 浮動小数点演算を整数演算に置き換え
  */
 
 #include <nes.h>
@@ -16,15 +16,12 @@ const unsigned char palette[16] = {
   0x0f, 0x0f, 0x0f, 0x0f
 };
 
-// グローバル変数
 static unsigned int press_count;
 static unsigned int timer;
 static unsigned char last_pad_state;
 static char buffer[32];
 
-// メイン関数
 void main(void) {
-  // 【修正】C89規格に準拠するため、ローカル変数を関数の先頭で宣言
   unsigned char pad;
 
   // --- 初期化 ---
@@ -50,8 +47,6 @@ void main(void) {
   // スタート待ちループ
   while (1) {
     ppu_wait_nmi();
-    
-    // 【修正】宣言済みの変数に代入する
     pad = pad_poll(0);
     
     if ((pad & (PAD_A | PAD_B)) && !(last_pad_state & (PAD_A | PAD_B))) {
@@ -68,13 +63,10 @@ void main(void) {
   cprintf("COUNT: 0");
   ppu_on_all();
 
-
   // --- メインゲームループ (10秒間) ---
   while (timer > 0) {
     ppu_wait_nmi();
     timer--;
-
-    // 【修正】宣言済みの変数に代入する
     pad = pad_poll(0);
 
     if ((pad & (PAD_A | PAD_B)) && !(last_pad_state & (PAD_A | PAD_B))) {
@@ -106,12 +98,19 @@ void main(void) {
   sprintf(buffer, "TOTAL: %d HITS", press_count);
   cprintf(buffer);
   
+  // 【修正】浮動小数点演算を整数演算に置き換える
   gotoxy(5, 16);
-  sprintf(buffer, "(%.1f HITS/SECOND)", (float)press_count / 10.0);
-  cprintf(buffer);
+  {
+    // press_count が 163 なら 16.3 HITS/SECOND
+    unsigned int hps_integer = press_count / 10; // 整数部 (16)
+    unsigned int hps_fraction = press_count % 10; // 小数部 (3)
+    
+    // " (16.3 HITS/SECOND)" という文字列を作成
+    sprintf(buffer, "(%d.%d HITS/SECOND)", hps_integer, hps_fraction);
+    cprintf(buffer);
+  }
   
   ppu_on_all();
 
-  // 無限ループで停止
   while (1);
 }
