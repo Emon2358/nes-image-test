@@ -72,19 +72,22 @@ MainLoop:
 
 ; --- PPU初期化ルーチン ---
 InitPPU:
-  ; パレットを読み込む
-  LDA PPUSTATUS
+  ; パレットを読み込む (正しい順序で)
+  LDA PPUSTATUS   ; PPUラッチをクリア
   LDA #$3F
   STA PPUADDR
   LDA #$00
-  STA PPUADDR
+  STA PPUADDR     ; $3F00 から書き込み開始
   
-  LDX #$03
+  LDX #$00
 LoadPaletteLoop:
-  LDA Palette, X
+  CPX #$04        ; 4バイト書き込む ($3F00, $3F01, $3F02, $3F03)
+  BEQ PaletteDone
+  LDA Palette, X  ; X=0, 1, 2, 3 の順で読み込む
   STA PPUDATA
-  DEX
-  BPL LoadPaletteLoop
+  INX
+  JMP LoadPaletteLoop
+PaletteDone:
   
   ; 固定テキスト ("AB:") をネームテーブルに書き込む
   LDA PPUSTATUS
@@ -105,7 +108,8 @@ TextDone:
 
 ; --- 固定データ ---
 Palette:
-  .byte $0F, $00, $10, $30 ; BG0(黒), BG1(濃灰), BG2(灰), BG3(白)
+  ; $3F00(背景), $3F01(文字), $3F02(予備1), $3F03(予備2)
+  .byte $0F, $30, $10, $00 ; BG0(黒), BG1(白), BG2(灰), BG3(濃灰)
 TextData:
   ; "AB:   " (A=$0A, B=$0B, :=$10)
   .byte $0A, $0B, $10, $20, $20, $20
