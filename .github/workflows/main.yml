@@ -1,50 +1,45 @@
-name: 🎮 Build NES Game ROM
+# .github/workflows/build.yml
 
+name: Build NES ROM
+
+# どのタイミングで実行するか (mainブランチへのpush時)
 on:
-  # 'Actions' タブから手動で実行できるようにする
-  workflow_dispatch: {}
-
-  # main ブランチにプッシュされたときにも実行
   push:
     branches:
       - main
-    paths:
-      # スクリプトが変更された場合のみ実行
-      - 'tools/rennda_game_builder.py'
-      - '.github/workflows/game_builder.yml'
+  # 手動実行も可能にする
+  workflow_dispatch:
 
 jobs:
-  build-nes-rom:
+  build:
+    # Ubuntuの最新版で実行
     runs-on: ubuntu-latest
 
     steps:
-      # 1. リポジトリのコード（ビルドスクリプト）をチェックアウト
-      - name: Check out repository
+      # 1. リポジトリのコードをチェックアウト
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Python 環境をセットアップ
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      
-      # 3. 依存ライブラリのインストール
-      # (このスクリプトは外部ライブラリを必要としません)
-      # - name: Install dependencies
-      #   run: pip install ...
-
-      # 4. ゲーム ROM ビルドスクリプトの実行
-      - name: Run NES Game Builder script
+      # 2. cc65コンパイラをインストール
+      - name: Install cc65
         run: |
-          # 出力用ディレクトリを作成
-          mkdir -p nes_rom
-          
-          # スクリプトを実行して ROM を生成
-          python tools/rennda_game_builder.py "nes_rom/rennda_game.nes"
+          sudo apt-get update
+          sudo apt-get install -y cc65
 
-      # 5. 生成された .nes ファイルを「アーティファクト」として保存
-      - name: Upload .nes ROM as Artifact
+      # 3. CコードをコンパイルしてROMをビルド
+      # cl65: cc65のコンパイラ・リンカを統合したフロントエンド
+      # -t nes: ターゲットをNESに指定
+      # -C nes.cfg: 使用するリンカ設定ファイルを指定
+      # -o rensya.nes: 出力するROMファイル名
+      # main.c: コンパイルするソースファイル
+      - name: Compile NES ROM
+        run: cl65 -t nes -C nes.cfg -o rensya.nes main.c
+
+      # 4. ビルドした.nesファイルをアーティファクトとしてアップロード
+      - name: Upload ROM Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nes-game-rom
-          path: nes_rom/rennda_game.nes
+          # アーティファクト名
+          name: nes-rom
+          # アップロードするファイル
+          path: rensya.nes
